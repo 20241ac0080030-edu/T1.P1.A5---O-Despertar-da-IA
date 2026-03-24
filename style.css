@@ -1,0 +1,143 @@
+/* style.css */
+
+/* Reset básico para manter tudo alinhado */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* Fundo escuro e futurista da página */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #050505; 
+    color: #e0e0e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-image: radial-gradient(circle at top, #111122 0%, #050505 100%);
+}
+
+/* Caixa principal do Chat */
+.chat-container {
+    width: 100%;
+    max-width: 500px;
+    background-color: #0a0a0c;
+    border-radius: 15px;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #1a1a2e;
+    overflow: hidden;
+}
+
+/* Cabeçalho "Sistema N.E.O.N." */
+.chat-header {
+    padding: 20px;
+    text-align: center;
+    background-color: #0f111a;
+    color: #00e5ff;
+    font-size: 1.3rem;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    border-bottom: 1px solid #00e5ff33;
+    box-shadow: 0 4px 10px rgba(0, 255, 255, 0.05);
+}
+
+/* Área onde ficam as mensagens (com barra de rolagem customizada) */
+.chat-box {
+    padding: 25px 20px;
+    height: 420px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.chat-box::-webkit-scrollbar { 
+    width: 6px; 
+}
+
+.chat-box::-webkit-scrollbar-thumb { 
+    background: #00e5ff55; 
+    border-radius: 5px; 
+}
+
+/* Estilo base de todas as bolhas de mensagens */
+.mensagem {
+    padding: 12px 18px;
+    border-radius: 12px;
+    max-width: 82%;
+    line-height: 1.5;
+    font-size: 0.95rem;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Animação suave quando a mensagem aparece */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Bolha da mensagem do Usuário (Operador) - Fica na Direita */
+.msg-usuario {
+    background-color: #1a1a2e;
+    color: #00e5ff;
+    align-self: flex-end;
+    border: 1px solid #00e5ff33;
+    border-bottom-right-radius: 0;
+}
+
+/* Bolha da mensagem da IA (N.E.O.N) - Fica na Esquerda */
+.msg-ia {
+    background-color: #11141c;
+    color: #ffffff;
+    align-self: flex-start;
+    border: 1px solid #232733;
+    border-bottom-left-radius: 0;
+}
+
+/* Área inferior onde digitamos e o botão enviar */
+.chat-input {
+    display: flex;
+    padding: 15px 20px;
+    background-color: #0a0a0c;
+    border-top: 1px solid #1a1a2e;
+}
+
+/* O campo de texto */
+input {
+    flex-grow: 1;
+    padding: 12px 15px;
+    border-radius: 8px;
+    border: 1px solid #232733;
+    background-color: #11141c;
+    color: white;
+    outline: none;
+    transition: all 0.3s;
+}
+
+input:focus {
+    border-color: #00e5ff;
+    box-shadow: 0 0 5px rgba(0, 255, 255, 0.2);
+}
+
+/* O botão de Enviar */
+button {
+    margin-left: 12px;
+    padding: 0 20px;
+    background: linear-gradient(45deg, #00b4d8, #0077b6);
+    color: white;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    box-shadow: 0 0 10px rgba(0, 180, 216, 0.5);
+    transform: translateY(-1px);
+}

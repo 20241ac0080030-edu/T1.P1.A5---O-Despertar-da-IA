@@ -1,182 +1,38 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agente IA | Terminal CLI</title>
-    <style>
-        :root {
-            --bg-color: #0d1117;
-            --terminal-bg: #010409;
-            --text-color: #c9d1d9;
-            --accent-color: #58a6ff;
-            --success-color: #3fb950;
-            --glow: 0 0 10px rgba(88, 166, 255, 0.5);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Inter', 'Segoe UI', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .portfolio-container {
-            max-width: 800px;
-            width: 100%;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .header h1 {
-            color: var(--accent-color);
-            font-size: 2.5rem;
-            text-shadow: var(--glow);
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            color: #8b949e;
-            font-size: 1.1rem;
-        }
-
-        .badges {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin: 20px 0;
-        }
-
-        .badge {
-            background: rgba(88, 166, 255, 0.1);
-            color: var(--accent-color);
-            border: 1px solid rgba(88, 166, 255, 0.4);
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 1px;
-        }
-
-        /* O Terminal Simulado */
-        .terminal-window {
-            background-color: var(--terminal-bg);
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            overflow: hidden;
-            font-family: 'Fira Code', 'Courier New', monospace;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
-        }
-
-        .terminal-header {
-            background-color: #161b22;
-            padding: 10px;
-            display: flex;
-            gap: 8px;
-            border-bottom: 1px solid #30363d;
-        }
-
-        .dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-        }
-        .dot.red { background-color: #ff5f56; }
-        .dot.yellow { background-color: #ffbd2e; }
-        .dot.green { background-color: #27c93f; }
-
-        .terminal-body {
-            padding: 20px;
-            font-size: 0.95rem;
-            line-height: 1.6;
-            min-height: 250px;
-        }
-
-        .command { color: var(--accent-color); font-weight: bold; }
-        .system { color: #8b949e; }
-        .ai-response { color: var(--success-color); }
-        .cursor {
-            display: inline-block;
-            width: 8px;
-            height: 15px;
-            background-color: var(--success-color);
-            animation: blink 1s step-end infinite;
-            vertical-align: middle;
-        }
-
-        @keyframes blink { 50% { opacity: 0; } }
-    </style>
+    <title>Agente N.E.O.N | Interface IA</title>
+    
+    <!-- Link ativado para ler as cores do seu CSS! -->
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div class="portfolio-container">
-        <div class="header">
-            <h1>O Despertar da IA</h1>
-            <p>Disciplina: Serviços em Nuvem | Prof. Vagner Simões</p>
-            <div class="badges">
-                <span class="badge">NODE.JS</span>
-                <span class="badge">GOOGLE GEMINI API</span>
-                <span class="badge">BACK-END CLI</span>
+    <div class="chat-container">
+        <!-- Cabeçalho do Chat -->
+        <div class="chat-header">
+            💠 SISTEMA N.E.O.N.
+        </div>
+        
+        <!-- Área onde as mensagens da conversa irão aparecer -->
+        <div class="chat-box" id="caixa-chat">
+            <div class="mensagem msg-ia">
+                Sistemas operacionais iniciados. Saudações, Operador. Como posso ajudar com a sua infraestrutura e código hoje?
             </div>
+            <!-- Futuras mensagens entrarão aqui pelo JavaScript -->
         </div>
 
-        <div class="terminal-window">
-            <div class="terminal-header">
-                <div class="dot red"></div>
-                <div class="dot yellow"></div>
-                <div class="dot green"></div>
-            </div>
-            <div class="terminal-body" id="terminal-content">
-                <!-- O JavaScript vai injetar o texto aqui -->
-            </div>
+        <!-- Área de digitação do usuário -->
+        <div class="chat-input">
+            <input type="text" id="campoTexto" placeholder="Comande o agente...">
+            <button id="btnEnviar">Enviar</button>
         </div>
     </div>
 
-    <script>
-        const terminalOutput =[
-            '<span class="system">carregando ambiente virtual... [OK]</span>',
-            '<span class="system">lendo credenciais seguras do arquivo .env... [OK]</span>',
-            '<span class="command">$ node index.js</span>',
-            '<span class="system">⏳ Conectando aos servidores do Google Gemini...</span>',
-            '<br>',
-            '<span class="ai-response">🤖 [MESTRE YODA DIZ]:</span>',
-            '<span class="ai-response">Uma API, explicar eu vou. Uma ponte invisível ela é. Sistemas diferentes, conversar ela permite. Os dados de um lado para o outro fluem, como a Força ao redor de nós. Se a comunicação entre as máquinas você busca, a API usar você deve!</span>',
-            '<br>',
-            '<span class="system">✅ Missão Concluída. Desconectando...</span>'
-        ];
+    <!-- Quando for criar seu JavaScript separado, você vai chamá-lo aqui -->
+    <!-- <script src="script.js"></script> -->
 
-        let i = 0;
-        const terminalBody = document.getElementById('terminal-content');
-
-        function simulateTerminal() {
-            if (i < terminalOutput.length) {
-                terminalBody.innerHTML += terminalOutput[i] + '<br>';
-                i++;
-                setTimeout(simulateTerminal, 800); // Velocidade de digitação das linhas
-            } else {
-                terminalBody.innerHTML += '<span class="cursor"></span>';
-            }
-        }
-
-        setTimeout(simulateTerminal, 1000);
-    </script>
 </body>
 </html>
