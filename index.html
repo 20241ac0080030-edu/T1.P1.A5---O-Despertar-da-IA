@@ -3,36 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agente N.E.O.N | Interface IA</title>
+    <title>Interface Neural | Agente N.E.O.N.</title>
     
-    <!-- Link ativado para ler as cores do seu CSS! -->
+    <!-- Link para a camada estética que faremos no próximo passo -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div class="chat-container">
-        <!-- Cabeçalho do Chat -->
-        <div class="chat-header">
-            💠 SISTEMA N.E.O.N.
-        </div>
-        
-        <!-- Área onde as mensagens da conversa irão aparecer -->
-        <div class="chat-box" id="caixa-chat">
-            <div class="mensagem msg-ia">
-                Sistemas operacionais iniciados. Saudações, Operador. Como posso ajudar com a sua infraestrutura e código hoje?
+    <main class="chat-container">
+        <!-- Cabeçalho de Comando -->
+        <header class="chat-header">
+            <div class="brand">
+                <span class="neon-icon">💠</span>
+                <h1>SISTEMA N.E.O.N.</h1>
             </div>
-            <!-- Futuras mensagens entrarão aqui pelo JavaScript -->
-        </div>
 
-        <!-- Área de digitação do usuário -->
-        <div class="chat-input">
-            <input type="text" id="campoTexto" placeholder="Comande o agente...">
-            <button id="btnEnviar">Enviar</button>
-        </div>
-    </div>
+            <!-- Seleção de Núcleo (Versão da IA) -->
+            <div class="engine-selector">
+                <label for="engine">NÚCLEO:</label>
+                <select id="seletor-versao">
+                    <option value="gemini-2.0-flash">NUC 2.0 (High Speed)</option>
+                    <option value="gemini-1.5-flash">NUC 1.5 (Standard)</option>
+                    <option value="gemini-1.5-pro">NUC 1.5 PRO (High Logic)</option>
+                </select>
+            </div>
+        </header>
 
-    <!-- Quando for criar seu JavaScript separado, você vai chamá-lo aqui -->
-    <!-- <script src="script.js"></script> -->
+        <!-- Área de Conversação -->
+        <section id="caixa-chat" class="chat-box">
+            <div class="mensagem msg-ia">
+                Sistemas operacionais ativados. Saudações, Operador. 
+                Selecione o núcleo desejado e envie seu comando.
+            </div>
+        </section>
+
+        <!-- Painel de Input -->
+        <footer class="chat-input">
+            <input 
+                type="text" 
+                id="campoTexto" 
+                placeholder="Insira comando neural..." 
+                autocomplete="off"
+            >
+            <button id="btnEnviar">ENVIAR</button>
+        </footer>
+    </main>
+
+    <!-- Link para a lógica de comunicação que faremos no Passo 5 -->
+    <script src="index.js"></script>
 
 </body>
 </html>
