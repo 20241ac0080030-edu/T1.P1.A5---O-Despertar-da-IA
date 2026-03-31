@@ -87,7 +87,7 @@ async function processarEnvioIA() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
-                mensagem: mensagem, 
+                pergunta: mensagem,  // <--- TROQUE APENAS ISTO AQUI
                 modelo: versaoModelo 
             }),
             // Tempo limite de 40 segundos antes de abortar o link
