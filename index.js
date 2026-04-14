@@ -143,3 +143,40 @@ styleNode.innerHTML = `
 document.head.appendChild(styleNode);
 
 console.log("💠 Sistemas N.E.O.N. operando em carga total. Aguardando comandos, Operador.");
+
+// ====================================================================
+// [DESAFIO HACKER] - ROTINA DE ANOSMIA FORÇADA (LIMPEZA DO MONGODB)
+// ====================================================================
+const btnLimparMemoria = document.getElementById("btnLimpar");
+
+btnLimparMemoria.addEventListener("click", async () => {
+    // Alerta de confirmação pro usuário não apagar sem querer!
+    const confirmacao = confirm("⚠️ ALERTA HACKER: Deseja apagar todo o Banco de Dados MongoDb na nuvem? Isso matará as memórias de Longo Prazo do N.E.O.N. !");
+    
+    if (confirmacao) {
+        try {
+            // Adiciona aviso visual que tá formatando...
+            adicionarMensagem("ia", `<span style="color: #ffcc00">⚠️ Solicitando limpeza do MongoDB na Cloud...</span>`);
+            btnLimparMemoria.disabled = true;
+
+            // Faz uma requisição do TIPO "DELETE" (Não é POST nem GET!)
+            const rotaLimpeza = await fetch("http://localhost:3000/api/chat/limpar", {
+                method: 'DELETE'
+            });
+
+            if (rotaLimpeza.ok) {
+                // Deleta TUDO no banco e dá o feedback visual
+                chatBox.innerHTML += `<div class="mensagem msg-ia" style="background-color: #330000; border-color: red; color: white;">🔥 FIREWALL BYPASS: Coleção (Tabela) limpa no Atlas. FORMAT C:/ executado!</div>`;
+                chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+                console.log("Banco Dropado Com Sucesso.");
+            } else {
+                throw new Error("Erro HTTP");
+            }
+        } catch (erroDelete) {
+            alert("A conexão com o servidor Node para a limpeza falhou. " + erroDelete);
+        } finally {
+            btnLimparMemoria.disabled = false;
+            campoTexto.focus();
+        }
+    }
+});

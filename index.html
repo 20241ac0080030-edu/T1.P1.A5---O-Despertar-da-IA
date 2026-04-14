@@ -21,11 +21,13 @@
             <!-- Seleção de Núcleo (Versão da IA) -->
             <div class="engine-selector">
                 <label for="engine">NÚCLEO:</label>
-                <select id="seletor-versao">
-                    <option value="gemini-2.0-flash">NUC 2.0 (High Speed)</option>
-                    <option value="gemini-1.5-flash">NUC 1.5 (Standard)</option>
-                    <option value="gemini-1.5-pro">NUC 1.5 PRO (High Logic)</option>
-                </select>
+               <!-- Localize o <select> no seu index.html e deixe-o assim -->
+<select id="seletor-versao">
+    <option value="gemini-1.5-flash">NUC 1.5 (Estável/Grátis)</option>
+    <option value="gemini-2.0-flash">NUC 2.0 (Moderno)</option>
+    <option value="gemini-2.5-flash">NUC 2.5 (Experimental)</option> <!-- PODE DAR ERRO 404 -->
+    <option value="gemini-3.0-flash">NUC 3.0 (Futurista)</option>   <!-- PODE DAR ERRO 404 -->
+</select>
             </div>
         </header>
 
@@ -39,13 +41,19 @@
 
         <!-- Painel de Input -->
         <footer class="chat-input">
+          <!-- Painel de Input Eletrostático -->
+        <footer class="chat-input" style="gap: 8px;">
+            <!-- DESAFIO HACKER: BOTÃO DE DELETAR DB -->
+            <button id="btnLimpar" title="Destruir Bando de Dados" style="background: #bf1832; color: white; padding: 0 15px; border: 1px solid #ff4444; border-radius: 8px; cursor: pointer; font-weight: bold; font-family: monospace;">☣️ FORMAT</button>
+            
             <input 
                 type="text" 
                 id="campoTexto" 
-                placeholder="Insira comando neural..." 
+                placeholder="Insira comando de rede Neural..." 
                 autocomplete="off"
             >
             <button id="btnEnviar">ENVIAR</button>
+        </footer>
         </footer>
     </main>
 
