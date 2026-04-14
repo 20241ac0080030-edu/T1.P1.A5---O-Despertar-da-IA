@@ -83,16 +83,17 @@ async function processarEnvioIA() {
         mostrarLoading();
 
         // CONEXÃO COM O REATOR (Back-end Server na porta 3000)
-        const respostaServidor = await fetch("http://localhost:3000/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                pergunta: mensagem,  // <--- TROQUE APENAS ISTO AQUI
-                modelo: versaoModelo 
-            }),
-            // Tempo limite de 40 segundos antes de abortar o link
-            signal: AbortSignal.timeout(40000)
-        });
+        // Use a URL que o Render te deu! 
+const URL_NUVEM = "https://t1-p1-a5-o-despertar-da-ia.onrender.com";
+
+const respostaServidor = await fetch(URL_NUVEM, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+        pergunta: mensagem, 
+        modelo: versaoModelo 
+    })
+});
 
         if (!respostaServidor.ok) throw new Error("Falha no link neural.");
 
