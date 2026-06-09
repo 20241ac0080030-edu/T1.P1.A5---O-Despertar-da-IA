@@ -1,16 +1,29 @@
 /**
  * SISTEMA N.E.O.N. - ENGINE DE INTERFACE (JS) FINAL
- * Versão: 2.0 Multicore - Operação de Estabilidade Máxima
+ * Versão: 2.2 - Ajuste de Endpoints Local / Nuvem
  */
 
 // 1. MAPEAMENTO DE SENSORES (ELEMENTOS DA INTERFACE)
 const chatBox = document.getElementById("caixa-chat");
 const campoTexto = document.getElementById("campoTexto");
 const btnEnviar = document.getElementById("btnEnviar");
-const seletorVersao = document.getElementById("seletor-versao"); // Importante para o Multicore
+const seletorVersao = document.getElementById("seletor-versao");
 
 // Estado global para evitar sobrecarga no link neural
 let estaProcessando = false;
+
+// ====================================================================
+// CONFIGURAÇÃO DE CONEXÃO (Escolha qual servidor deseja consumir)
+// ====================================================================
+// Para testar localmente no seu computador (com o Node.js rodando no terminal)
+const URL_LOCAL = "http://localhost:3000";
+
+// Para usar a API que você publicou no Render
+const URL_NUVEM = "https://t1-p1-a5-o-despertar-da-ia.onrender.com";
+
+// --- DIGITE ABAIXO QUAL URL VOCÊ QUER USAR AGORA ---
+const URL_ATIVA = URL_NUVEM; // Mude para URL_LOCAL se quiser testar no seu computador
+// ====================================================================
 
 /**
  * Função Mestra de Renderização
@@ -82,18 +95,15 @@ async function processarEnvioIA() {
         campoTexto.value = ""; 
         mostrarLoading();
 
-        // CONEXÃO COM O REATOR (Back-end Server na porta 3000)
-        // Use a URL que o Render te deu! 
-const URL_NUVEM = "https://t1-p1-a5-o-despertar-da-ia.onrender.com";
-
-const respostaServidor = await fetch(URL_NUVEM, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-        pergunta: mensagem, 
-        modelo: versaoModelo 
-    })
-});
+        // fetch apontando especificamente para o endpoint correto: "/api/chat"
+        const respostaServidor = await fetch(`${URL_ATIVA}/api/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                pergunta: mensagem, 
+                modelo: versaoModelo 
+            })
+        });
 
         if (!respostaServidor.ok) throw new Error("Falha no link neural.");
 
@@ -106,8 +116,8 @@ const respostaServidor = await fetch(URL_NUVEM, {
     } catch (erro) {
         removerLoading();
         console.error("Falha Crítica:", erro);
-        let msgErro = "⚠️ FALHA NO NÚCLEO: Link neural interrompido. Verifique o servidor Node.js no terminal.";
-        if (erro.name === 'TimeoutError') msgErro = "⚠️ TIMEOUT: O sinal demorou muito a retornar da nuvem.";
+        let msgErro = "⚠️ FALHA NO NÚCLEO: Link neural interrompido. Verifique o servidor Node.js.";
+        if (erro.name === 'TimeoutError') msgErro = "⚠️ TIMEOUT: O sinal demorou muito a retornar.";
         
         adicionarMensagem("ia", `<span style="color: #ff5555">${msgErro}</span>`);
     } finally {
@@ -151,30 +161,27 @@ console.log("💠 Sistemas N.E.O.N. operando em carga total. Aguardando comandos
 const btnLimparMemoria = document.getElementById("btnLimpar");
 
 btnLimparMemoria.addEventListener("click", async () => {
-    // Alerta de confirmação pro usuário não apagar sem querer!
-    const confirmacao = confirm("⚠️ ALERTA HACKER: Deseja apagar todo o Banco de Dados MongoDb na nuvem? Isso matará as memórias de Longo Prazo do N.E.O.N. !");
+    const confirmacao = confirm("⚠️ ALERTA HACKER: Deseja apagar todo o Banco de Dados MongoDb? Isso matará as memórias de Longo Prazo do N.E.O.N. !");
     
     if (confirmacao) {
         try {
-            // Adiciona aviso visual que tá formatando...
             adicionarMensagem("ia", `<span style="color: #ffcc00">⚠️ Solicitando limpeza do MongoDB na Cloud...</span>`);
             btnLimparMemoria.disabled = true;
 
-            // Faz uma requisição do TIPO "DELETE" (Não é POST nem GET!)
-            const rotaLimpeza = await fetch("http://localhost:3000/api/chat/limpar", {
+            // Envia para o endpoint correto de limpeza "/api/chat/limpar"
+            const rotaLimpeza = await fetch(`${URL_ATIVA}/api/chat/limpar`, {
                 method: 'DELETE'
             });
 
             if (rotaLimpeza.ok) {
-                // Deleta TUDO no banco e dá o feedback visual
-                chatBox.innerHTML += `<div class="mensagem msg-ia" style="background-color: #330000; border-color: red; color: white;">🔥 FIREWALL BYPASS: Coleção (Tabela) limpa no Atlas. FORMAT C:/ executado!</div>`;
+                chatBox.innerHTML += `<div class="mensagem msg-ia" style="background-color: #330000; border-color: red; color: white;">🔥 FIREWALL BYPASS: Coleção limpa no Atlas. FORMAT realizado!</div>`;
                 chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
                 console.log("Banco Dropado Com Sucesso.");
             } else {
                 throw new Error("Erro HTTP");
             }
         } catch (erroDelete) {
-            alert("A conexão com o servidor Node para a limpeza falhou. " + erroDelete);
+            alert("A conexão com o servidor para a limpeza falhou. " + erroDelete);
         } finally {
             btnLimparMemoria.disabled = false;
             campoTexto.focus();
