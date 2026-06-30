@@ -1,6 +1,6 @@
 /**
  * SISTEMA N.E.O.N. - ENGINE DE INTERFACE (JS) FINAL
- * Versão: 2.2 - Ajuste de Endpoints Local / Nuvem
+ * Versão: 2.3 - Sincronização e Diagnóstico de Erros
  */
 
 // 1. MAPEAMENTO DE SENSORES (ELEMENTOS DA INTERFACE)
@@ -21,8 +21,8 @@ const URL_LOCAL = "http://localhost:3000";
 // Para usar a API que você publicou no Render
 const URL_NUVEM = "https://t1-p1-a5-o-despertar-da-ia.onrender.com";
 
-// --- DIGITE ABAIXO QUAL URL VOCÊ QUER USAR AGORA ---
-const URL_ATIVA = URL_NUVEM; // Mude para URL_LOCAL se quiser testar no seu computador
+// --- SELECIONE A URL ATIVA ---
+const URL_ATIVA = URL_NUVEM; // Altere para URL_LOCAL se estiver rodando localmente
 // ====================================================================
 
 /**
@@ -95,7 +95,7 @@ async function processarEnvioIA() {
         campoTexto.value = ""; 
         mostrarLoading();
 
-        // fetch apontando especificamente para o endpoint correto: "/api/chat"
+        // Conecta ao endpoint correto (/api/chat)
         const respostaServidor = await fetch(`${URL_ATIVA}/api/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -105,7 +105,11 @@ async function processarEnvioIA() {
             })
         });
 
-        if (!respostaServidor.ok) throw new Error("Falha no link neural.");
+        if (!respostaServidor.ok) {
+            // Tenta ler o JSON de erro do backend para diagnosticar na interface
+            const dadosErro = await respostaServidor.json().catch(() => ({}));
+            throw new Error(dadosErro.erro || "Falha no link neural.");
+        }
 
         const dados = await respostaServidor.json();
 
@@ -116,8 +120,9 @@ async function processarEnvioIA() {
     } catch (erro) {
         removerLoading();
         console.error("Falha Crítica:", erro);
-        let msgErro = "⚠️ FALHA NO NÚCLEO: Link neural interrompido. Verifique o servidor Node.js.";
-        if (erro.name === 'TimeoutError') msgErro = "⚠️ TIMEOUT: O sinal demorou muito a retornar.";
+        
+        let msgErro = erro.message || "⚠️ FALHA NO NÚCLEO: Link neural interrompido. Verifique o servidor Node.js no terminal.";
+        if (erro.name === 'TimeoutError') msgErro = "⚠️ TIMEOUT: O sinal demorou muito a retornar da nuvem.";
         
         adicionarMensagem("ia", `<span style="color: #ff5555">${msgErro}</span>`);
     } finally {
@@ -168,7 +173,6 @@ btnLimparMemoria.addEventListener("click", async () => {
             adicionarMensagem("ia", `<span style="color: #ffcc00">⚠️ Solicitando limpeza do MongoDB na Cloud...</span>`);
             btnLimparMemoria.disabled = true;
 
-            // Envia para o endpoint correto de limpeza "/api/chat/limpar"
             const rotaLimpeza = await fetch(`${URL_ATIVA}/api/chat/limpar`, {
                 method: 'DELETE'
             });
@@ -178,10 +182,11 @@ btnLimparMemoria.addEventListener("click", async () => {
                 chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
                 console.log("Banco Dropado Com Sucesso.");
             } else {
-                throw new Error("Erro HTTP");
+                const erroResposta = await rotaLimpeza.json().catch(() => ({}));
+                throw new Error(erroResposta.erro || "Erro HTTP na rota de limpeza.");
             }
         } catch (erroDelete) {
-            alert("A conexão com o servidor para a limpeza falhou. " + erroDelete);
+            adicionarMensagem("ia", `<span style="color: #ff5555">⚠️ FORMAT FALHOU: ${erroDelete.message}</span>`);
         } finally {
             btnLimparMemoria.disabled = false;
             campoTexto.focus();
