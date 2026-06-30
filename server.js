@@ -120,7 +120,7 @@ app.post('/api/chat', async (req, res) => {
         const { pergunta, modelo } = req.body;
         if (!pergunta) return res.status(400).json({ erro: "Envie uma pergunta." });
 
-        const modeloAtivo = modelo || "gemini-1.5-flash";
+        const modeloAtivo = modelo || "gemini-2.0-flash";
 
         // 1. SISTEMA DE CONTINGÊNCIA: Busca o histórico do MongoDB ou recorre à RAM local
         let docs = [];

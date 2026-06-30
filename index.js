@@ -79,7 +79,7 @@ function removerLoading() {
  */
 async function processarEnvioIA() {
     const mensagem = campoTexto.value.trim();
-    const versaoModelo = seletorVersao ? seletorVersao.value : "gemini-1.5-flash";
+    const versaoModelo = seletorVersao ? seletorVersao.value : "gemini-2.0-flash";
 
     // Validação de entrada e estado do sistema
     if (mensagem === "" || estaProcessando) return;
