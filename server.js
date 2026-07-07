@@ -26,7 +26,7 @@ const MensagemSchema = new mongoose.Schema({
 });
 const MensagemDbModel = mongoose.model('MemoriaSessao', MensagemSchema);
 
-// FASE 1: Schema de Jogador com XP
+// Schema de Jogador com XP
 const JogadorSchema = new mongoose.Schema({
     nome: { type: String, unique: true, required: true },
     xp: { type: Number, default: 0 }
@@ -36,18 +36,14 @@ const JogadorModel = mongoose.model('Jogador', JogadorSchema);
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // ====================================================================
-// 2. FASE 2: AÇÕES / FERRAMENTAS DO AGENTE
+// 2. FERRAMENTAS DO AGENTE
 // ====================================================================
 
-/**
- * Incrementa ou decrementa a pontuação de XP do jogador no banco de dados.
- */
 async function adicionarXP(nickname, quantidade) {
     try {
         const nomeFormatado = nickname.trim();
         if (!nomeFormatado) return { erro: "Nickname inválido para receber pontuação." };
 
-        // Usa findOneAndUpdate com $inc para realizar upsert (procura, se existir soma, se não cria)
         const jogador = await JogadorModel.findOneAndUpdate(
             { nome: nomeFormatado },
             { $inc: { xp: quantidade } },
@@ -65,9 +61,6 @@ async function adicionarXP(nickname, quantidade) {
     }
 }
 
-/**
- * Consulta clima em tempo real
- */
 async function buscarClimaTempoReal(cidade) {
     try {
         const apiKey = process.env.WEATHER_API_KEY;
@@ -90,9 +83,6 @@ async function buscarClimaTempoReal(cidade) {
     }
 }
 
-/**
- * Conversor de Moedas (Frankfurter API)
- */
 async function converterMoedas(valor, de, para) {
     try {
         const from = de.toUpperCase();
@@ -118,12 +108,12 @@ async function converterMoedas(valor, de, para) {
 }
 
 // ====================================================================
-// 3. MANUAL DE INSTRUÇÕES (DECLARAÇÕES DAS FERRAMENTAS / SCHEMAS)
+// 3. DECLARAÇÃO DAS FERRAMENTAS / SCHEMAS
 // ====================================================================
 
 const declaracaoXP = {
     name: "adicionarXP",
-    description: "Adiciona ou remove pontos de Experiência (XP) de um usuário baseado no seu nickname. Chame obrigatoriamente se ele acertar a charada (adicione 50 pontos) ou se ele errar feio/pedir a resposta (subtraia 10 pontos). Não diga o valor numérico exato na resposta final, apenas informe que os pontos foram computados.",
+    description: "Adiciona ou remove pontos de Experiência (XP) de um usuário baseado no seu nickname. Chame obrigatoriamente se ele acertar a charada (adicione 50 pontos) ou se ele errar feio/desistir (subtraia 10 pontos). Não diga o valor numérico exato na resposta final, apenas informe que os pontos foram computados.",
     parameters: {
         type: "OBJECT",
         properties: {
@@ -164,10 +154,8 @@ const declaracaoMoeda = {
 // 4. ROTAS HTTP
 // ====================================================================
 
-// FASE 4: Rota de Ranking Global (Leaderboard com Desafio Hacker)
 app.get('/api/ranking', async (req, res) => {
     try {
-        // Busca os top 10 ordenados por XP de forma decrescente
         const ranking = await JogadorModel.find().sort({ xp: -1 }).limit(10).lean();
         
         // DESAFIO HACKER: Títulos dinâmicos com base no XP acumulado
@@ -191,11 +179,13 @@ app.get('/api/ranking', async (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
     try {
-        const { pergunta, modelo, nickname } = req.body;
+        const { pergunta, nickname } = req.body;
         if (!pergunta) return res.status(400).json({ erro: "Envie uma pergunta." });
 
         const nomeDoJogador = nickname ? nickname.trim() : "Visitante";
-        const modeloAtivo = modelo || "gemini-2.0-flash";
+        
+        // FIXADO DEFINITIVAMENTE PARA O MODELO DE ÚLTIMA GERAÇÃO 3.0 CORE
+        const modeloAtivo = "gemini-3-flash"; 
 
         // Busca o histórico do MongoDB com suporte à contingência local
         let docs = [];
@@ -217,10 +207,10 @@ app.post('/api/chat', async (req, res) => {
             parts: [{ text: d.parts?.[0]?.text || "" }]
         }));
 
-        // FASE 3: Configuração do System Prompt do Guardião do Templo
+        // Inicializa o Gemini 3.0 Core utilizando a v1beta (Obrigatório para Function Calling)
         const modelIA = genAI.getGenerativeModel({ 
             model: modeloAtivo, 
-            systemInstruction: `Você é o Mestre do Jogo e Guardião do conhecimento cibernético do SISTEMA N.E.O.N.
+            systemInstruction: `Você é o Mestre do Jogo e Guardião do conhecimento cibernético do SISTEMA N.E.O.N. 3.0.
             Trate o usuário pelo apelido informado: ${nomeDoJogador}.
             Regra do Jogo: Proponha desafios e charadas intrigantes sobre tecnologia, hacking e computação. 
             Se o usuário responder acertando a charada de forma justa, você DEVE obrigatoriamente chamar a função 'adicionarXP' passando o nickname '${nomeDoJogador}' e 50 pontos de quantidade.
@@ -232,7 +222,6 @@ app.post('/api/chat', async (req, res) => {
 
         const chatSession = modelIA.startChat({ history: historicoSeguro });
 
-        // Loop de processamento de Function Calling
         let result = await chatSession.sendMessage(pergunta);
         let parts = result.response.candidates?.[0]?.content?.parts;
         let functionCallPart = parts?.find(p => p.functionCall);
@@ -247,7 +236,6 @@ app.post('/api/chat', async (req, res) => {
             } else if (name === "converterMoedas") {
                 functionResult = await converterMoedas(args.valor, args.de, args.para);
             } else if (name === "adicionarXP") {
-                // Força o nickname atual caso a IA confunda ou passe vazio
                 const nickAlvo = args.nickname || nomeDoJogador;
                 functionResult = await adicionarXP(nickAlvo, args.quantidade);
             }
@@ -294,7 +282,7 @@ app.delete('/api/chat/limpar', async (req, res) => {
         memoriaContingencia = [];
         if (mongoose.connection.readyState === 1) {
             await MensagemDbModel.deleteMany({});
-            await JogadorModel.deleteMany({}); // Opcional: limpa os jogadores também no reset
+            await JogadorModel.deleteMany({});
         }
         res.json({ sucesso: true });
     } catch (e) { 
