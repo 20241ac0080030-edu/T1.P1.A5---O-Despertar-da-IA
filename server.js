@@ -8,7 +8,6 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Memória de contingência caso o MongoDB esteja offline
 let memoriaContingencia = [];
 
 // ====================================================================
@@ -18,7 +17,6 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('📦 BANCO DE DADOS ATIVO!'))
   .catch((err) => console.error('❌ ERRO MONGO (Modo de Contingência Ativo):', err.message));
 
-// Modelo de Memória do Chat
 const MensagemSchema = new mongoose.Schema({
     role: String,
     parts: [{ text: String }],
@@ -26,7 +24,6 @@ const MensagemSchema = new mongoose.Schema({
 });
 const MensagemDbModel = mongoose.model('MemoriaSessao', MensagemSchema);
 
-// Schema de Jogador com XP
 const JogadorSchema = new mongoose.Schema({
     nome: { type: String, unique: true, required: true },
     xp: { type: Number, default: 0 }
@@ -158,7 +155,6 @@ app.get('/api/ranking', async (req, res) => {
     try {
         const ranking = await JogadorModel.find().sort({ xp: -1 }).limit(10).lean();
         
-        // DESAFIO HACKER: Títulos dinâmicos com base no XP acumulado
         const rankingGamificado = ranking.map(jogador => {
             let titulo = "Novato";
             if (jogador.xp >= 500) titulo = "Lenda";
@@ -179,13 +175,13 @@ app.get('/api/ranking', async (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
     try {
-        const { pergunta, nickname } = req.body;
+        const { pergunta, modelo, nickname } = req.body;
         if (!pergunta) return res.status(400).json({ erro: "Envie uma pergunta." });
 
         const nomeDoJogador = nickname ? nickname.trim() : "Visitante";
         
-        // FIXADO DEFINITIVAMENTE PARA O MODELO DE ÚLTIMA GERAÇÃO 3.0 CORE
-        const modeloAtivo = "gemini-3-flash"; 
+        // CORREÇÃO CRÍTICA: Definido o padrão gemini-3.5-flash (Modelo ativo estável de 2026)
+        const modeloAtivo = modelo || "gemini-3.5-flash"; 
 
         // Busca o histórico do MongoDB com suporte à contingência local
         let docs = [];
@@ -207,10 +203,10 @@ app.post('/api/chat', async (req, res) => {
             parts: [{ text: d.parts?.[0]?.text || "" }]
         }));
 
-        // Inicializa o Gemini 3.0 Core utilizando a v1beta (Obrigatório para Function Calling)
+        // Inicializa o Gemini 3.5 Core utilizando a v1beta (Obrigatório para Function Calling)
         const modelIA = genAI.getGenerativeModel({ 
             model: modeloAtivo, 
-            systemInstruction: `Você é o Mestre do Jogo e Guardião do conhecimento cibernético do SISTEMA N.E.O.N. 3.0.
+            systemInstruction: `Você é o Mestre do Jogo e Guardião do conhecimento cibernético do SISTEMA N.E.O.N. 3.5.
             Trate o usuário pelo apelido informado: ${nomeDoJogador}.
             Regra do Jogo: Proponha desafios e charadas intrigantes sobre tecnologia, hacking e computação. 
             Se o usuário responder acertando a charada de forma justa, você DEVE obrigatoriamente chamar a função 'adicionarXP' passando o nickname '${nomeDoJogador}' e 50 pontos de quantidade.

@@ -1,12 +1,12 @@
 /**
  * SISTEMA N.E.O.N. - ENGINE DE INTERFACE (JS) FINAL
- * Versão: 3.0 - Última Geração (Gemini 3.0 Core)
+ * Versão: 3.5 - Adaptado para o Gemini 3.5 Core
  */
 
-// 1. MAPEAMENTO DE SENSORES
 const chatBox = document.getElementById("caixa-chat");
 const campoTexto = document.getElementById("campoTexto");
 const btnEnviar = document.getElementById("btnEnviar");
+const seletorVersao = document.getElementById("seletor-versao");
 const nicknameInput = document.getElementById("nickname");
 const btnRanking = document.getElementById("btnRanking");
 const modalRanking = document.getElementById("modalRanking");
@@ -15,19 +15,10 @@ const rankingTabela = document.getElementById("rankingTabela");
 
 let estaProcessando = false;
 
-// ====================================================================
-// CONFIGURAÇÃO DE ENDPOINTS
-// ====================================================================
 const URL_LOCAL = "http://localhost:3000";
 const URL_NUVEM = "https://t1-p1-a5-o-despertar-da-ia.onrender.com";
-
-// --- SELECIONE A URL ATIVA ---
 const URL_ATIVA = URL_NUVEM; // Altere para URL_LOCAL se estiver rodando localmente
-// ====================================================================
 
-/**
- * Renderização com Gatilho de Confetes
- */
 function adicionarMensagem(remetente, texto) {
     const div = document.createElement("div");
     div.classList.add("mensagem", remetente === "usuario" ? "msg-usuario" : "msg-ia");
@@ -52,7 +43,7 @@ function adicionarMensagem(remetente, texto) {
     });
 }
 
-function ejecutarConfete() {
+function executarConfete() {
     if (typeof confetti === "function") {
         confetti({
             particleCount: 100,
@@ -76,11 +67,9 @@ function removerLoading() {
     if (loading) loading.remove();
 }
 
-/**
- * Comunicação Neural
- */
 async function processarEnvioIA() {
     const mensagem = campoTexto.value.trim();
+    const versaoModelo = seletorVersao ? seletorVersao.value : "gemini-3.5-flash"; // Ajustado fallback de modelo
     const nick = nicknameInput ? nicknameInput.value.trim() : "";
 
     if (!nick) {
@@ -100,12 +89,12 @@ async function processarEnvioIA() {
         campoTexto.value = ""; 
         mostrarLoading();
 
-        // Faz a chamada enviando o nick (o backend cuidará de usar a versão 3.0 por padrão)
         const respostaServidor = await fetch(`${URL_ATIVA}/api/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
                 pergunta: mensagem, 
+                modelo: versaoModelo,
                 nickname: nick
             })
         });
@@ -133,9 +122,6 @@ async function processarEnvioIA() {
     }
 }
 
-/**
- * Carrega a tabela de classificação
- */
 async function carregarRankingGlobal() {
     rankingTabela.innerHTML = `<span style="color: #00f2ff">📡 Estabelecendo conexão de dados com o Ranking...</span>`;
     modalRanking.style.display = "flex";
@@ -183,7 +169,6 @@ async function carregarRankingGlobal() {
     }
 }
 
-// GATILHOS DE COMANDO
 btnEnviar.addEventListener("click", processarEnvioIA);
 campoTexto.addEventListener("keypress", (e) => {
     if (e.key === "Enter") processarEnvioIA();
@@ -197,7 +182,6 @@ window.addEventListener("click", (e) => {
 
 console.log("💠 Sistemas N.E.O.N. operando em carga total. Operação Gamificada.");
 
-// LIMPEZA
 const btnLimparMemoria = document.getElementById("btnLimpar");
 btnLimparMemoria.addEventListener("click", async () => {
     const confirmacao = confirm("⚠️ ALERTA HACKER: Deseja apagar todo o Banco de Dados MongoDb? Isso removerá o histórico e as memórias de XP de todos os jogadores!");
@@ -212,7 +196,7 @@ btnLimparMemoria.addEventListener("click", async () => {
             });
 
             if (rotaLimpeza.ok) {
-                chatBox.innerHTML += `<div class="mensagem msg-ia" style="background-color: #330000; border-color: red; color: white;">🔥 FIREWALL BYPASS: Coleções limpas no Atlas. FORMAT realizado!</div>`;
+                chatBox.innerHTML += `<div class="mensagem msg-ia" style="background-color: #330000; border-color: red; color: white;">🔥 FIREWALL BYPASS: Coleção limpa no Atlas. FORMAT realizado!</div>`;
                 chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
             } else {
                 const erroResposta = await rotaLimpeza.json().catch(() => ({}));
