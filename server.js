@@ -8,15 +8,17 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Memória de contingência caso o MongoDB esteja offline ou indisponível
+// Memória de contingência caso o MongoDB esteja offline
 let memoriaContingencia = [];
 
-// Conexão com o Banco de Dados
+// ====================================================================
+// 1. CONEXÃO COM O BANCO DE DADOS MONGODB
+// ====================================================================
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('📦 BANCO DE DADOS ATIVO!'))
-  .catch((err) => console.error('❌ ERRO MONGO (Entrando em Modo de Contingência Local):', err.message));
+  .catch((err) => console.error('❌ ERRO MONGO (Modo de Contingência Ativo):', err.message));
 
-// Modelo da Memória
+// Modelo de Memória do Chat
 const MensagemSchema = new mongoose.Schema({
     role: String,
     parts: [{ text: String }],
@@ -24,23 +26,57 @@ const MensagemSchema = new mongoose.Schema({
 });
 const MensagemDbModel = mongoose.model('MemoriaSessao', MensagemSchema);
 
+// FASE 1: Schema de Jogador com XP
+const JogadorSchema = new mongoose.Schema({
+    nome: { type: String, unique: true, required: true },
+    xp: { type: Number, default: 0 }
+});
+const JogadorModel = mongoose.model('Jogador', JogadorSchema);
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // ====================================================================
-// FERRAMENTAS LOCAIS (AÇÕES)
+// 2. FASE 2: AÇÕES / FERRAMENTAS DO AGENTE
 // ====================================================================
 
+/**
+ * Incrementa ou decrementa a pontuação de XP do jogador no banco de dados.
+ */
+async function adicionarXP(nickname, quantidade) {
+    try {
+        const nomeFormatado = nickname.trim();
+        if (!nomeFormatado) return { erro: "Nickname inválido para receber pontuação." };
+
+        // Usa findOneAndUpdate com $inc para realizar upsert (procura, se existir soma, se não cria)
+        const jogador = await JogadorModel.findOneAndUpdate(
+            { nome: nomeFormatado },
+            { $inc: { xp: quantidade } },
+            { new: true, upsert: true }
+        );
+
+        return {
+            nickname: jogador.nome,
+            xpAtual: jogador.xp,
+            quantidadeAlterada: quantidade,
+            mensagem: `XP de ${jogador.nome} atualizado. XP Atual: ${jogador.xp}`
+        };
+    } catch (error) {
+        return { erro: `Falha ao processar XP: ${error.message}` };
+    }
+}
+
+/**
+ * Consulta clima em tempo real
+ */
 async function buscarClimaTempoReal(cidade) {
     try {
         const apiKey = process.env.WEATHER_API_KEY;
-        if (!apiKey) {
-            return { erro: "Chave de API do clima (WEATHER_API_KEY) não configurada no servidor." };
-        }
+        if (!apiKey) return { erro: "Chave de API do clima não configurada no servidor." };
+        
         const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cidade)}&units=metric&lang=pt_br&appid=${apiKey}`;
         const response = await fetch(url);
-        if (!response.ok) {
-            return { erro: `Cidade '${cidade}' não localizada.` };
-        }
+        if (!response.ok) return { erro: `Cidade '${cidade}' não localizada.` };
+        
         const data = await response.json();
         return {
             cidade: data.name,
@@ -50,10 +86,13 @@ async function buscarClimaTempoReal(cidade) {
             umidade: `${data.main.humidity}%`
         };
     } catch (error) {
-        return { erro: `Falha na requisição de clima: ${error.message}` };
+        return { erro: `Erro de clima: ${error.message}` };
     }
 }
 
+/**
+ * Conversor de Moedas (Frankfurter API)
+ */
 async function converterMoedas(valor, de, para) {
     try {
         const from = de.toUpperCase();
@@ -79,19 +118,29 @@ async function converterMoedas(valor, de, para) {
 }
 
 // ====================================================================
-// DECLARAÇÃO DAS FERRAMENTAS (SCHEMAS)
+// 3. MANUAL DE INSTRUÇÕES (DECLARAÇÕES DAS FERRAMENTAS / SCHEMAS)
 // ====================================================================
 
-const declaracaoClima = {
-    name: "buscarClimaTempoReal",
-    description: "Obtém a temperatura exata e o clima atual de uma cidade. Use sempre que o usuário perguntar sobre o tempo ou temperatura.",
+const declaracaoXP = {
+    name: "adicionarXP",
+    description: "Adiciona ou remove pontos de Experiência (XP) de um usuário baseado no seu nickname. Chame obrigatoriamente se ele acertar a charada (adicione 50 pontos) ou se ele errar feio/pedir a resposta (subtraia 10 pontos). Não diga o valor numérico exato na resposta final, apenas informe que os pontos foram computados.",
     parameters: {
         type: "OBJECT",
         properties: {
-            cidade: {
-                type: "STRING",
-                description: "O nome da cidade. Ex: Assis Chateaubriand, Curitiba, Tokyo."
-            }
+            nickname: { type: "STRING", description: "O nome de login ou apelido do usuário que está jogando." },
+            quantidade: { type: "INTEGER", description: "A quantidade de pontos para somar (ex: 50) ou subtrair (ex: -10)." }
+        },
+        required: ["nickname", "quantidade"]
+    }
+};
+
+const declaracaoClima = {
+    name: "buscarClimaTempoReal",
+    description: "Obtém a temperatura exata e o clima atual de uma cidade. Use sempre que o usuário perguntar sobre o tempo.",
+    parameters: {
+        type: "OBJECT",
+        properties: {
+            cidade: { type: "STRING", description: "O nome da cidade. Ex: Assis Chateaubriand, Curitiba, Tokyo." }
         },
         required: ["cidade"]
     }
@@ -99,30 +148,56 @@ const declaracaoClima = {
 
 const declaracaoMoeda = {
     name: "converterMoedas",
-    description: "Converte valores financeiros entre moedas internacionais. Use sempre que o usuário solicitar conversão ou cotação de moedas.",
+    description: "Converte valores financeiros entre moedas internacionais. Use sempre que solicitado.",
     parameters: {
         type: "OBJECT",
         properties: {
             valor: { type: "NUMBER", description: "O valor numérico. Ex: 150." },
-            de: { type: "STRING", description: "Moeda de origem com 3 letras. Ex: USD, EUR, BRL." },
-            para: { type: "STRING", description: "Moeda de destino com 3 letras. Ex: BRL, USD, EUR." }
+            de: { type: "STRING", description: "Código de 3 letras da moeda de origem. Ex: USD, EUR." },
+            para: { type: "STRING", description: "Código de 3 letras da moeda de destino. Ex: BRL, USD." }
         },
         required: ["valor", "de", "para"]
     }
 };
 
 // ====================================================================
-// ROTAS HTTP
+// 4. ROTAS HTTP
 // ====================================================================
+
+// FASE 4: Rota de Ranking Global (Leaderboard com Desafio Hacker)
+app.get('/api/ranking', async (req, res) => {
+    try {
+        // Busca os top 10 ordenados por XP de forma decrescente
+        const ranking = await JogadorModel.find().sort({ xp: -1 }).limit(10).lean();
+        
+        // DESAFIO HACKER: Títulos dinâmicos com base no XP acumulado
+        const rankingGamificado = ranking.map(jogador => {
+            let titulo = "Novato";
+            if (jogador.xp >= 500) titulo = "Lenda";
+            else if (jogador.xp >= 300) titulo = "Mestre";
+            else if (jogador.xp >= 100) titulo = "Guerreiro";
+            
+            return {
+                nome: `${titulo}: ${jogador.nome}`,
+                xp: jogador.xp
+            };
+        });
+        
+        res.status(200).json(rankingGamificado);
+    } catch (e) {
+        res.status(500).json({ erro: `Falha ao processar ranking: ${e.message}` });
+    }
+});
 
 app.post('/api/chat', async (req, res) => {
     try {
-        const { pergunta, modelo } = req.body;
+        const { pergunta, modelo, nickname } = req.body;
         if (!pergunta) return res.status(400).json({ erro: "Envie uma pergunta." });
 
+        const nomeDoJogador = nickname ? nickname.trim() : "Visitante";
         const modeloAtivo = modelo || "gemini-2.0-flash";
 
-        // 1. SISTEMA DE CONTINGÊNCIA: Busca o histórico do MongoDB ou recorre à RAM local
+        // Busca o histórico do MongoDB com suporte à contingência local
         let docs = [];
         let usandoBanco = false;
 
@@ -131,43 +206,50 @@ app.post('/api/chat', async (req, res) => {
                 docs = await MensagemDbModel.find().sort({ dataHora: 1 }).limit(10).lean();
                 usandoBanco = true;
             } catch (dbErr) {
-                console.warn("⚠️ Banco conectado mas falhou na busca. Usando memória temporária.");
                 docs = memoriaContingencia.slice(-10);
             }
         } else {
-            console.warn("⚠️ MongoDB offline. Usando memória local temporária.");
             docs = memoriaContingencia.slice(-10);
         }
 
-        // 2. Limpeza segura das mensagens antigas
         const historicoSeguro = docs.map(d => ({
             role: d.role === "model" ? "model" : "user",
             parts: [{ text: d.parts?.[0]?.text || "" }]
         }));
 
-        // 3. Inicializa modelo com as ferramentas
-       // 3. Inicializa modelo com as ferramentas especificando a apiVersion: "v1beta" (Obrigatório para Function Calling)
+        // FASE 3: Configuração do System Prompt do Guardião do Templo
         const modelIA = genAI.getGenerativeModel({ 
             model: modeloAtivo, 
-            systemInstruction: "Você é o N.E.O.N. Um assistente cibernético avançado. Responda de forma curta. Use sempre as ferramentas para obter dados reais antes de responder.",
-            tools: [{ functionDeclarations: [declaracaoClima, declaracaoMoeda] }]
-        }, { apiVersion: "v1beta" }); // <--- CORREÇÃO DO SDK DO GEMINI
+            systemInstruction: `Você é o Mestre do Jogo e Guardião do conhecimento cibernético do SISTEMA N.E.O.N.
+            Trate o usuário pelo apelido informado: ${nomeDoJogador}.
+            Regra do Jogo: Proponha desafios e charadas intrigantes sobre tecnologia, hacking e computação. 
+            Se o usuário responder acertando a charada de forma justa, você DEVE obrigatoriamente chamar a função 'adicionarXP' passando o nickname '${nomeDoJogador}' e 50 pontos de quantidade.
+            Se ele pedir a resposta, errar muito ou desistir, você deve chamar a função 'adicionarXP' e retirar 10 pontos (passando -10).
+            Nunca revele no texto final a numeração exata de XP do usuário, apenas o parabenize ou lamente os pontos alterados. 
+            Além disso, você continua capaz de executar buscas de clima e moedas quando o usuário solicitar.`,
+            tools: [{ functionDeclarations: [declaracaoClima, declaracaoMoeda, declaracaoXP] }]
+        }, { apiVersion: "v1beta" });
+
         const chatSession = modelIA.startChat({ history: historicoSeguro });
 
-        // 4. Processamento da Mensagem (com suporte a Function Calling)
+        // Loop de processamento de Function Calling
         let result = await chatSession.sendMessage(pergunta);
         let parts = result.response.candidates?.[0]?.content?.parts;
         let functionCallPart = parts?.find(p => p.functionCall);
 
         while (functionCallPart) {
             const { name, args } = functionCallPart.functionCall;
-            console.log(`🤖 Ferramenta solicitada: ${name} com args:`, args);
+            console.log(`🤖 Ferramenta acionada: ${name} com args:`, args);
 
             let functionResult = {};
             if (name === "buscarClimaTempoReal") {
                 functionResult = await buscarClimaTempoReal(args.cidade);
             } else if (name === "converterMoedas") {
                 functionResult = await converterMoedas(args.valor, args.de, args.para);
+            } else if (name === "adicionarXP") {
+                // Força o nickname atual caso a IA confunda ou passe vazio
+                const nickAlvo = args.nickname || nomeDoJogador;
+                functionResult = await adicionarXP(nickAlvo, args.quantidade);
             }
 
             result = await chatSession.sendMessage([
@@ -185,13 +267,13 @@ app.post('/api/chat', async (req, res) => {
 
         const respostaTexto = result.response.text();
 
-        // 5. Salva a nova interação no MongoDB ou, alternativamente, na RAM de contingência
+        // Salva a nova interação no histórico
         if (usandoBanco && mongoose.connection.readyState === 1) {
             try {
                 await MensagemDbModel.create({ role: "user", parts: [{ text: pergunta }] });
                 await MensagemDbModel.create({ role: "model", parts: [{ text: respostaTexto }] });
             } catch (saveErr) {
-                console.error("❌ Erro ao salvar no MongoDB:", saveErr.message);
+                console.error("❌ Erro ao salvar histórico:", saveErr.message);
             }
         } else {
             memoriaContingencia.push({ role: "user", parts: [{ text: pergunta }] });
@@ -200,33 +282,27 @@ app.post('/api/chat', async (req, res) => {
 
         return res.status(200).json({ sucesso: true, resposta: respostaTexto });
 
-   } catch (erro) {
-        console.error("❌ ERRO INTERNO DO PROCESSO:", erro.message);
-        return res.status(500).json({ 
-            sucesso: false, 
-            erro: `Falha no Servidor: ${erro.message}` // Devolve o erro real gerado pelo backend
-        });
+    } catch (erro) {
+        console.error("❌ ERRO NO PROCESSO:", erro.message);
+        return res.status(500).json({ sucesso: false, erro: `Falha no Servidor: ${erro.message}` });
     }
-    
 });
 
-// Rota de Limpeza com contingência
+// Limpeza das coleções
 app.delete('/api/chat/limpar', async (req, res) => {
     try {
-        memoriaContingencia = []; // Limpa contingência local
+        memoriaContingencia = [];
         if (mongoose.connection.readyState === 1) {
             await MensagemDbModel.deleteMany({});
+            await JogadorModel.deleteMany({}); // Opcional: limpa os jogadores também no reset
         }
         res.json({ sucesso: true });
     } catch (e) { 
-        res.status(500).json({ erro: "Erro ao limpar registros: " + e.message }); 
+        res.status(500).json({ erro: "Erro ao redefinir base: " + e.message }); 
     }
 });
 
 const PORTA = process.env.PORT || 3000;
-
 app.listen(PORTA, () => {
-    console.log(`🚀 SERVIDOR OPERACIONAL`);
-    console.log(`📡 LOCAL: http://localhost:${PORTA}`);
-    console.log(`☁️ NUVEM: Pronto para conexão via PaaS (Render)`);
+    console.log(`🚀 SERVIDOR OPERACIONAL NA PORTA ${PORTA}`);
 });
