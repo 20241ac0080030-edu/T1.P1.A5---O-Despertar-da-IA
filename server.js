@@ -8,6 +8,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Memória de contingência caso o MongoDB esteja offline
 let memoriaContingencia = [];
 
 // ====================================================================
@@ -17,6 +18,7 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('📦 BANCO DE DADOS ATIVO!'))
   .catch((err) => console.error('❌ ERRO MONGO (Modo de Contingência Ativo):', err.message));
 
+// Modelo de Memória do Chat
 const MensagemSchema = new mongoose.Schema({
     role: String,
     parts: [{ text: String }],
@@ -24,6 +26,7 @@ const MensagemSchema = new mongoose.Schema({
 });
 const MensagemDbModel = mongoose.model('MemoriaSessao', MensagemSchema);
 
+// Schema de Jogador com XP
 const JogadorSchema = new mongoose.Schema({
     nome: { type: String, unique: true, required: true },
     xp: { type: Number, default: 0 }
@@ -175,13 +178,13 @@ app.get('/api/ranking', async (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
     try {
-        const { pergunta, modelo, nickname } = req.body;
+        const { pergunta, nickname } = req.body;
         if (!pergunta) return res.status(400).json({ erro: "Envie uma pergunta." });
 
         const nomeDoJogador = nickname ? nickname.trim() : "Visitante";
         
-        // CORREÇÃO CRÍTICA: Definido o padrão gemini-3.5-flash (Modelo ativo estável de 2026)
-        const modeloAtivo = modelo || "gemini-3.5-flash"; 
+        // Mantido no modelo estável consagrado gemini-1.5-flash
+        const modeloAtivo = "gemini-1.5-flash"; 
 
         // Busca o histórico do MongoDB com suporte à contingência local
         let docs = [];
@@ -203,7 +206,7 @@ app.post('/api/chat', async (req, res) => {
             parts: [{ text: d.parts?.[0]?.text || "" }]
         }));
 
-        // Inicializa o Gemini 3.5 Core utilizando a v1beta (Obrigatório para Function Calling)
+        // Inicializa o modelo usando o endpoint estável v1 (Remove o v1beta que gerava o erro 404)
         const modelIA = genAI.getGenerativeModel({ 
             model: modeloAtivo, 
             systemInstruction: `Você é o Mestre do Jogo e Guardião do conhecimento cibernético do SISTEMA N.E.O.N. 3.5.
@@ -214,7 +217,7 @@ app.post('/api/chat', async (req, res) => {
             Nunca revele no texto final a numeração exata de XP do usuário, apenas o parabenize ou lamente os pontos alterados. 
             Além disso, você continua capaz de executar buscas de clima e moedas quando o usuário solicitar.`,
             tools: [{ functionDeclarations: [declaracaoClima, declaracaoMoeda, declaracaoXP] }]
-        }, { apiVersion: "v1beta" });
+        }); // Sem o segundo parâmetro v1beta para garantir a rota padrão estável
 
         const chatSession = modelIA.startChat({ history: historicoSeguro });
 
