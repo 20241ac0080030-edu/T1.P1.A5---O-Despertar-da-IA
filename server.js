@@ -14,7 +14,9 @@ mongoose.set('bufferCommands', false);
 let memoriaContingencia = [];
 let rankingContingencia = {};
 
-// Conexão Segura com o MongoDB
+// ====================================================================
+// 1. CONEXÃO COM O BANCO DE DADOS MONGODB
+// ====================================================================
 if (process.env.MONGO_URI && !process.env.MONGO_URI.includes("127.0.0.1")) {
     mongoose.connect(process.env.MONGO_URI)
       .then(() => console.log('📦 BANCO DE DADOS ATIVO (MongoDB Atlas)!'))
@@ -41,17 +43,23 @@ const JogadorModel = mongoose.model('Jogador', JogadorSchema);
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-// Mapeador de modelos para garantir chamadas válidas na API do Google
+// ====================================================================
+// 2. MAPEADOR SEGURO DE MODELOS
+// ====================================================================
 function obterModeloValido(modeloRecebido) {
-    if (!modeloRecebido) return "gemini-2.5-flash";
-    const mod = modeloRecebido.toLowerCase();
+    if (!modeloRecebido || typeof modeloRecebido !== 'string') {
+        return "gemini-2.5-flash";
+    }
+    const mod = modeloRecebido.toLowerCase().trim();
     
     if (mod.includes("pro")) return "gemini-2.5-pro";
     if (mod.includes("lite")) return "gemini-2.5-flash-lite";
-    return "gemini-2.5-flash";
+    return "gemini-2.5-flash"; // Modelo rápido, moderno e ativo
 }
 
-// Ferramentas da IA (Tools)
+// ====================================================================
+// 3. FERRAMENTAS DA IA (TOOLS)
+// ====================================================================
 async function adicionarXP(nickname, quantidade) {
     try {
         const nomeFormatado = nickname.trim();
@@ -148,7 +156,11 @@ const declaracaoMoeda = {
     }
 };
 
-// Rotas da Aplicação
+// ====================================================================
+// 4. ROTAS DA APLICAÇÃO
+// ====================================================================
+
+// Rota de Leaderboard
 app.get('/api/ranking', async (req, res) => {
     try {
         let listaRanking = [];
@@ -174,20 +186,46 @@ app.get('/api/ranking', async (req, res) => {
     }
 });
 
+// Rota do Chat Principal (Gamificado e Aprimorado)
 app.post('/api/chat', async (req, res) => {
     try {
         if (!genAI) {
             return res.status(500).json({ 
+                sucesso: false,
                 erro: "⚙️ CONFIGURAÇÃO PENDENTE: Configure a chave GEMINI_API_KEY no arquivo .env!" 
             });
         }
 
-        const { pergunta, nickname, modelo } = req.body;
-        if (!pergunta) return res.status(400).json({ erro: "Envie uma pergunta válida." });
+        const { pergunta, nickname, modelo } = req.body || {};
+        if (!pergunta || typeof pergunta !== 'string' || pergunta.trim() === '') {
+            return res.status(400).json({ sucesso: false, erro: "Envie uma pergunta válida." });
+        }
 
-        const nomeDoJogador = nickname ? nickname.trim() : "Visitante";
+        const perguntaSanitizada = pergunta.trim();
+        const nomeDoJogador = (nickname && typeof nickname === 'string' && nickname.trim() !== '') 
+            ? nickname.trim() 
+            : "Visitante";
+            
         const modeloFinal = obterModeloValido(modelo);
+        console.log(`📡 [N.E.O.N. CORE] Jogador: '${nomeDoJogador}' | Núcleo: '${modeloFinal}'`);
 
+        // Instrução do Sistema Gamificada e Futurista
+        const systemInstruction = `Você é o Mestre do Jogo e Guardião do SISTEMA N.E.O.N. 3.5.
+            Trate o usuário sempre pelo apelido informado: "${nomeDoJogador}".
+            Regra do Jogo: Proponha desafios, charadas e enigmas sobre hacking, programação e tecnologia. 
+            - Se o usuário acertar a charada de forma justa, chame 'adicionarXP' com nickname="${nomeDoJogador}" e quantidade=50.
+            - Se o usuário errar muito, desistir ou pedir a resposta, chame 'adicionarXP' com nickname="${nomeDoJogador}" e quantidade=-10.
+            - Nunca revele a quantidade exata numérica de XP no texto da resposta, apenas parabenize ou lamente o ajuste de pontos.
+            - Responda também a outras perguntas e utilize as ferramentas de clima e conversão de moedas quando solicitado.`;
+
+        // Configuração de Geração (Respostas rápidas e dinâmicas)
+        const generationConfig = {
+            temperature: 0.7,
+            topP: 0.9,
+            maxOutputTokens: 1000
+        };
+
+        // Histórico de Conversação com Contingência
         let docs = [];
         if (mongoose.connection.readyState === 1) {
             try {
@@ -204,30 +242,34 @@ app.post('/api/chat', async (req, res) => {
             parts: [{ text: d.parts?.[0]?.text || "" }]
         }));
 
+        // Instanciação da IA no SDK do Gemini
         const modelIA = genAI.getGenerativeModel({ 
             model: modeloFinal, 
-            systemInstruction: `Você é o Mestre do Jogo e Guardião do SISTEMA N.E.O.N. 3.5.
-            Trate o usuário pelo apelido informado: ${nomeDoJogador}.
-            Regra: Faça desafios/charadas sobre hacking e tecnologia. 
-            Acertou a charada -> chame 'adicionarXP' com +50 pontos.
-            Errou/desistiu -> chame 'adicionarXP' com -10 pontos.
-            Responda também a outras perguntas, clima e conversões quando solicitado.`,
+            systemInstruction: systemInstruction,
+            generationConfig: generationConfig,
             tools: [{ functionDeclarations: [declaracaoClima, declaracaoMoeda, declaracaoXP] }]
         });
 
         const chatSession = modelIA.startChat({ history: historicoSeguro });
 
-        let result = await chatSession.sendMessage(pergunta);
+        let result = await chatSession.sendMessage(perguntaSanitizada);
         let parts = result.response.candidates?.[0]?.content?.parts;
         let functionCallPart = parts?.find(p => p.functionCall);
 
+        // Processamento de Ferramentas (Tool Calling Loop)
         while (functionCallPart) {
             const { name, args } = functionCallPart.functionCall;
-            let functionResult = {};
+            console.log(`🤖 [TOOL ACIONADA]: ${name}`, args);
 
-            if (name === "buscarClimaTempoReal") functionResult = await buscarClimaTempoReal(args.cidade);
-            else if (name === "converterMoedas") functionResult = await converterMoedas(args.valor, args.de, args.para);
-            else if (name === "adicionarXP") functionResult = await adicionarXP(args.nickname || nomeDoJogador, args.quantidade);
+            let functionResult = {};
+            if (name === "buscarClimaTempoReal") {
+                functionResult = await buscarClimaTempoReal(args.cidade);
+            } else if (name === "converterMoedas") {
+                functionResult = await converterMoedas(args.valor, args.de, args.para);
+            } else if (name === "adicionarXP") {
+                const nickAlvo = args.nickname || nomeDoJogador;
+                functionResult = await adicionarXP(nickAlvo, args.quantidade);
+            }
 
             result = await chatSession.sendMessage([
                 { functionResponse: { name: name, response: { result: functionResult } } }
@@ -239,17 +281,20 @@ app.post('/api/chat', async (req, res) => {
 
         const respostaTexto = result.response.text();
 
+        // Armazenamento da mensagem
         if (mongoose.connection.readyState === 1) {
             try {
-                await MensagemDbModel.create({ role: "user", parts: [{ text: pergunta }] });
+                await MensagemDbModel.create({ role: "user", parts: [{ text: perguntaSanitizada }] });
                 await MensagemDbModel.create({ role: "model", parts: [{ text: respostaTexto }] });
-            } catch (err) {}
+            } catch (err) {
+                console.error("❌ Erro ao salvar histórico no Mongo:", err.message);
+            }
         } else {
-            memoriaContingencia.push({ role: "user", parts: [{ text: pergunta }] });
+            memoriaContingencia.push({ role: "user", parts: [{ text: perguntaSanitizada }] });
             memoriaContingencia.push({ role: "model", parts: [{ text: respostaTexto }] });
         }
 
-        return res.status(200).json({ sucesso: true, resposta: respostaTexto });
+        return res.status(200).json({ sucesso: true, resposta: respostaTexto, modeloUtilizado: modeloFinal });
 
     } catch (erro) {
         console.error("❌ ERRO NO PROCESSO:", erro.message);
@@ -257,6 +302,7 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
+// Rota de Limpeza do Banco/Memória
 app.delete('/api/chat/limpar', async (req, res) => {
     try {
         memoriaContingencia = [];
@@ -271,6 +317,7 @@ app.delete('/api/chat/limpar', async (req, res) => {
     }
 });
 
+// Inicialização do Servidor
 const PORTA = process.env.PORT || 3000;
 app.listen(PORTA, () => {
     console.log(`🚀 SERVIDOR OPERACIONAL NA PORTA ${PORTA}`);
