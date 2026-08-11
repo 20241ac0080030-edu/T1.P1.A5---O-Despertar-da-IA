@@ -1,6 +1,5 @@
 /**
- * SISTEMA N.E.O.N. - ENGINE DE INTERFACE (JS) FINAL
- * Versão: 3.5 - Adaptado para o Gemini 3.5 Core
+ * SISTEMA N.E.O.N. - ENGINE DE INTERFACE (JS)
  */
 
 const chatBox = document.getElementById("caixa-chat");
@@ -17,7 +16,11 @@ let estaProcessando = false;
 
 const URL_LOCAL = "http://localhost:3000";
 const URL_NUVEM = "https://t1-p1-a5-o-despertar-da-ia.onrender.com";
-const URL_ATIVA = URL_NUVEM; // Altere para URL_LOCAL se estiver rodando localmente
+
+// Detecção Automática de Ambiente (Local vs Render)
+const URL_ATIVA = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.protocol === "file:") 
+    ? URL_LOCAL 
+    : URL_NUVEM;
 
 function adicionarMensagem(remetente, texto) {
     const div = document.createElement("div");
@@ -69,11 +72,11 @@ function removerLoading() {
 
 async function processarEnvioIA() {
     const mensagem = campoTexto.value.trim();
-    const versaoModelo = seletorVersao ? seletorVersao.value : "gemini-3.5-flash"; // Ajustado fallback de modelo
+    const versaoModelo = seletorVersao ? seletorVersao.value : "gemini-2.5-flash";
     const nick = nicknameInput ? nicknameInput.value.trim() : "";
 
     if (!nick) {
-        alert("⚠️ ATENÇÃO OPERADOR: Digite o seu NICK (apelido) antes de enviar comandos para participar do Ranking!");
+        alert("⚠️ ATENÇÃO OPERADOR: Digite o seu NICK (apelido) no cabeçalho antes de enviar comandos!");
         nicknameInput.focus();
         return;
     }
@@ -99,12 +102,11 @@ async function processarEnvioIA() {
             })
         });
 
-        if (!respostaServidor.ok) {
-            const dadosErro = await respostaServidor.json().catch(() => ({}));
-            throw new Error(dadosErro.erro || "Falha no link neural.");
-        }
-
         const dados = await respostaServidor.json();
+
+        if (!respostaServidor.ok) {
+            throw new Error(dados.erro || "Falha no link neural com o servidor.");
+        }
 
         removerLoading();
         adicionarMensagem("ia", dados.resposta);
@@ -112,7 +114,7 @@ async function processarEnvioIA() {
     } catch (erro) {
         removerLoading();
         console.error("Falha Crítica:", erro);
-        let msgErro = erro.message || "⚠️ FALHA NO NÚCLEO: Link neural interrompido. Verifique o servidor Node.js.";
+        let msgErro = erro.message || "⚠️ FALHA NO NÚCLEO: Link neural interrompido.";
         adicionarMensagem("ia", `<span style="color: #ff5555">${msgErro}</span>`);
     } finally {
         estaProcessando = false;
@@ -123,17 +125,17 @@ async function processarEnvioIA() {
 }
 
 async function carregarRankingGlobal() {
-    rankingTabela.innerHTML = `<span style="color: #00f2ff">📡 Estabelecendo conexão de dados com o Ranking...</span>`;
+    rankingTabela.innerHTML = `<span style="color: #00f2ff">📡 Conectando ao Leaderboard...</span>`;
     modalRanking.style.display = "flex";
 
     try {
         const resposta = await fetch(`${URL_ATIVA}/api/ranking`);
-        if (!resposta.ok) throw new Error("Erro de rede ao buscar Leaderboard.");
+        if (!resposta.ok) throw new Error("Erro ao buscar o Ranking.");
 
         const jogadores = await resposta.json();
         
         if (jogadores.length === 0) {
-            rankingTabela.innerHTML = `<p style="text-align: center; color: #888;">Nenhum jogador registrado no Hall da Fama ainda.</p>`;
+            rankingTabela.innerHTML = `<p style="text-align: center; color: #888;">Nenhum jogador registrado ainda.</p>`;
             return;
         }
 
@@ -180,33 +182,19 @@ window.addEventListener("click", (e) => {
     if (e.target === modalRanking) modalRanking.style.display = "none";
 });
 
-console.log("💠 Sistemas N.E.O.N. operando em carga total. Operação Gamificada.");
-
 const btnLimparMemoria = document.getElementById("btnLimpar");
-btnLimparMemoria.addEventListener("click", async () => {
-    const confirmacao = confirm("⚠️ ALERTA HACKER: Deseja apagar todo o Banco de Dados MongoDb? Isso removerá o histórico e as memórias de XP de todos os jogadores!");
-    
-    if (confirmacao) {
-        try {
-            adicionarMensagem("ia", `<span style="color: #ffcc00">⚠️ Solicitando limpeza do MongoDB na Cloud...</span>`);
-            btnLimparMemoria.disabled = true;
-
-            const rotaLimpeza = await fetch(`${URL_ATIVA}/api/chat/limpar`, {
-                method: 'DELETE'
-            });
-
-            if (rotaLimpeza.ok) {
-                chatBox.innerHTML += `<div class="mensagem msg-ia" style="background-color: #330000; border-color: red; color: white;">🔥 FIREWALL BYPASS: Coleção limpa no Atlas. FORMAT realizado!</div>`;
-                chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
-            } else {
-                const erroResposta = await rotaLimpeza.json().catch(() => ({}));
-                throw new Error(erroResposta.erro || "Erro HTTP na rota de limpeza.");
+if (btnLimparMemoria) {
+    btnLimparMemoria.addEventListener("click", async () => {
+        if (confirm("⚠️ ALERTA: Deseja apagar o Banco de Dados e os XPs?")) {
+            try {
+                adicionarMensagem("ia", `<span style="color: #ffcc00">⚠️ Solicitando limpeza...</span>`);
+                const rotaLimpeza = await fetch(`${URL_ATIVA}/api/chat/limpar`, { method: 'DELETE' });
+                if (rotaLimpeza.ok) {
+                    chatBox.innerHTML += `<div class="mensagem msg-ia" style="background-color: #330000; border-color: red; color: white;">🔥 Dados limpos com sucesso!</div>`;
+                }
+            } catch (err) {
+                adicionarMensagem("ia", `<span style="color: #ff5555">⚠️ Falha ao limpar: ${err.message}</span>`);
             }
-        } catch (erroDelete) {
-            adicionarMensagem("ia", `<span style="color: #ff5555">⚠️ FORMAT FALHOU: ${erroDelete.message}</span>`);
-        } finally {
-            btnLimparMemoria.disabled = false;
-            campoTexto.focus();
         }
-    }
-});
+    });
+}

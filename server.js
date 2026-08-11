@@ -8,17 +8,22 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Memória de contingência caso o MongoDB esteja offline
+// Previne o travamento de requisições se o MongoDB estiver desconectado
+mongoose.set('bufferCommands', false);
+
 let memoriaContingencia = [];
+let rankingContingencia = {};
 
-// ====================================================================
-// 1. CONEXÃO COM O BANCO DE DADOS MONGODB
-// ====================================================================
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('📦 BANCO DE DADOS ATIVO!'))
-  .catch((err) => console.error('❌ ERRO MONGO (Modo de Contingência Ativo):', err.message));
+// Conexão Segura com o MongoDB
+if (process.env.MONGO_URI && !process.env.MONGO_URI.includes("127.0.0.1")) {
+    mongoose.connect(process.env.MONGO_URI)
+      .then(() => console.log('📦 BANCO DE DADOS ATIVO (MongoDB Atlas)!'))
+      .catch((err) => console.error('⚠️ AVISO MONGO (Modo sem banco ativo):', err.message));
+} else {
+    console.log('⚠️ MONGO_URI não informada ou apontando para local sem serviço. Rodando em Modo de Contingência (RAM).');
+}
 
-// Modelo de Memória do Chat
+// Schemas do Mongoose
 const MensagemSchema = new mongoose.Schema({
     role: String,
     parts: [{ text: String }],
@@ -26,36 +31,43 @@ const MensagemSchema = new mongoose.Schema({
 });
 const MensagemDbModel = mongoose.model('MemoriaSessao', MensagemSchema);
 
-// Schema de Jogador com XP
 const JogadorSchema = new mongoose.Schema({
     nome: { type: String, unique: true, required: true },
     xp: { type: Number, default: 0 }
 });
 const JogadorModel = mongoose.model('Jogador', JogadorSchema);
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Inicialização da SDK Gemini
+const apiKey = process.env.GEMINI_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-// ====================================================================
-// 2. FERRAMENTAS DO AGENTE
-// ====================================================================
+// Mapeador de modelos para garantir chamadas válidas na API do Google
+function obterModeloValido(modeloRecebido) {
+    if (!modeloRecebido) return "gemini-2.5-flash";
+    const mod = modeloRecebido.toLowerCase();
+    
+    if (mod.includes("pro")) return "gemini-2.5-pro";
+    if (mod.includes("lite")) return "gemini-2.5-flash-lite";
+    return "gemini-2.5-flash";
+}
 
+// Ferramentas da IA (Tools)
 async function adicionarXP(nickname, quantidade) {
     try {
         const nomeFormatado = nickname.trim();
-        if (!nomeFormatado) return { erro: "Nickname inválido para receber pontuação." };
+        if (!nomeFormatado) return { erro: "Nickname inválido." };
 
-        const jogador = await JogadorModel.findOneAndUpdate(
-            { nome: nomeFormatado },
-            { $inc: { xp: quantidade } },
-            { new: true, upsert: true }
-        );
-
-        return {
-            nickname: jogador.nome,
-            xpAtual: jogador.xp,
-            quantidadeAlterada: quantidade,
-            mensagem: `XP de ${jogador.nome} atualizado. XP Atual: ${jogador.xp}`
-        };
+        if (mongoose.connection.readyState === 1) {
+            const jogador = await JogadorModel.findOneAndUpdate(
+                { nome: nomeFormatado },
+                { $inc: { xp: quantidade } },
+                { new: true, upsert: true }
+            );
+            return { nickname: jogador.nome, xpAtual: jogador.xp, quantidadeAlterada: quantidade };
+        } else {
+            rankingContingencia[nomeFormatado] = (rankingContingencia[nomeFormatado] || 0) + quantidade;
+            return { nickname: nomeFormatado, xpAtual: rankingContingencia[nomeFormatado], quantidadeAlterada: quantidade };
+        }
     } catch (error) {
         return { erro: `Falha ao processar XP: ${error.message}` };
     }
@@ -63,10 +75,10 @@ async function adicionarXP(nickname, quantidade) {
 
 async function buscarClimaTempoReal(cidade) {
     try {
-        const apiKey = process.env.WEATHER_API_KEY;
-        if (!apiKey) return { erro: "Chave de API do clima não configurada no servidor." };
+        const weatherApiKey = process.env.WEATHER_API_KEY;
+        if (!weatherApiKey) return { info: "A funcionalidade de clima precisa da chave WEATHER_API_KEY no .env" };
         
-        const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cidade)}&units=metric&lang=pt_br&appid=${apiKey}`;
+        const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cidade)}&units=metric&lang=pt_br&appid=${weatherApiKey}`;
         const response = await fetch(url);
         if (!response.ok) return { erro: `Cidade '${cidade}' não localizada.` };
         
@@ -74,9 +86,7 @@ async function buscarClimaTempoReal(cidade) {
         return {
             cidade: data.name,
             temperatura: `${Math.round(data.main.temp)}°C`,
-            sensacaoTermica: `${Math.round(data.main.feels_like)}°C`,
-            clima: data.weather[0].description,
-            umidade: `${data.main.humidity}%`
+            clima: data.weather[0].description
         };
     } catch (error) {
         return { erro: `Erro de clima: ${error.message}` };
@@ -91,34 +101,24 @@ async function converterMoedas(valor, de, para) {
         
         const url = `https://api.frankfurter.app/latest?amount=${valor}&from=${from}&to=${to}`;
         const response = await fetch(url);
-        if (!response.ok) return { erro: `Falha ao converter moedas de ${from} para ${to}.` };
+        if (!response.ok) return { erro: `Falha na conversão.` };
         
         const data = await response.json();
-        const resultado = data.rates[to];
-        return {
-            valorOriginal: valor,
-            moedaOrigem: from,
-            moedaDestino: to,
-            valorConvertido: resultado.toFixed(2),
-            dataCotacao: data.date
-        };
+        return { valorOriginal: valor, moedaOrigem: from, moedaDestino: to, valorConvertido: data.rates[to].toFixed(2) };
     } catch (error) {
         return { erro: `Erro na conversão: ${error.message}` };
     }
 }
 
-// ====================================================================
-// 3. DECLARAÇÃO DAS FERRAMENTAS / SCHEMAS
-// ====================================================================
-
+// Declaração de Schemas para Tool Calling
 const declaracaoXP = {
     name: "adicionarXP",
-    description: "Adiciona ou remove pontos de Experiência (XP) de um usuário baseado no seu nickname. Chame obrigatoriamente se ele acertar a charada (adicione 50 pontos) ou se ele errar feio/desistir (subtraia 10 pontos). Não diga o valor numérico exato na resposta final, apenas informe que os pontos foram computados.",
+    description: "Adiciona ou remove XP de um usuário baseado no nickname. Adicione 50 pontos se ele acertar a charada, ou subtraia 10 pontos se ele errar/desistir.",
     parameters: {
         type: "OBJECT",
         properties: {
-            nickname: { type: "STRING", description: "O nome de login ou apelido do usuário que está jogando." },
-            quantidade: { type: "INTEGER", description: "A quantidade de pontos para somar (ex: 50) ou subtrair (ex: -10)." }
+            nickname: { type: "STRING", description: "O apelido do usuário." },
+            quantidade: { type: "INTEGER", description: "Pontos (+50 ou -10)." }
         },
         required: ["nickname", "quantidade"]
     }
@@ -126,48 +126,46 @@ const declaracaoXP = {
 
 const declaracaoClima = {
     name: "buscarClimaTempoReal",
-    description: "Obtém a temperatura exata e o clima atual de uma cidade. Use sempre que o usuário perguntar sobre o tempo.",
+    description: "Obtém a temperatura e clima atual de uma cidade.",
     parameters: {
         type: "OBJECT",
-        properties: {
-            cidade: { type: "STRING", description: "O nome da cidade. Ex: Assis Chateaubriand, Curitiba, Tokyo." }
-        },
+        properties: { cidade: { type: "STRING", description: "Nome da cidade." } },
         required: ["cidade"]
     }
 };
 
 const declaracaoMoeda = {
     name: "converterMoedas",
-    description: "Converte valores financeiros entre moedas internacionais. Use sempre que solicitado.",
+    description: "Converte valores entre moedas internacionais.",
     parameters: {
         type: "OBJECT",
         properties: {
-            valor: { type: "NUMBER", description: "O valor numérico. Ex: 150." },
-            de: { type: "STRING", description: "Código de 3 letras da moeda de origem. Ex: USD, EUR." },
-            para: { type: "STRING", description: "Código de 3 letras da moeda de destino. Ex: BRL, USD." }
+            valor: { type: "NUMBER", description: "Valor numérico." },
+            de: { type: "STRING", description: "Moeda origem (ex: USD)." },
+            para: { type: "STRING", description: "Moeda destino (ex: BRL)." }
         },
         required: ["valor", "de", "para"]
     }
 };
 
-// ====================================================================
-// 4. ROTAS HTTP
-// ====================================================================
-
+// Rotas da Aplicação
 app.get('/api/ranking', async (req, res) => {
     try {
-        const ranking = await JogadorModel.find().sort({ xp: -1 }).limit(10).lean();
+        let listaRanking = [];
+        if (mongoose.connection.readyState === 1) {
+            listaRanking = await JogadorModel.find().sort({ xp: -1 }).limit(10).lean();
+        } else {
+            listaRanking = Object.keys(rankingContingencia).map(nome => ({
+                nome, xp: rankingContingencia[nome]
+            })).sort((a, b) => b.xp - a.xp).slice(0, 10);
+        }
         
-        const rankingGamificado = ranking.map(jogador => {
+        const rankingGamificado = listaRanking.map(j => {
             let titulo = "Novato";
-            if (jogador.xp >= 500) titulo = "Lenda";
-            else if (jogador.xp >= 300) titulo = "Mestre";
-            else if (jogador.xp >= 100) titulo = "Guerreiro";
-            
-            return {
-                nome: `${titulo}: ${jogador.nome}`,
-                xp: jogador.xp
-            };
+            if (j.xp >= 500) titulo = "Lenda";
+            else if (j.xp >= 300) titulo = "Mestre";
+            else if (j.xp >= 100) titulo = "Guerreiro";
+            return { nome: `${titulo}: ${j.nome}`, xp: j.xp };
         });
         
         res.status(200).json(rankingGamificado);
@@ -178,23 +176,23 @@ app.get('/api/ranking', async (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
     try {
-        const { pergunta, nickname } = req.body;
-        if (!pergunta) return res.status(400).json({ erro: "Envie uma pergunta." });
+        if (!genAI) {
+            return res.status(500).json({ 
+                erro: "⚙️ CONFIGURAÇÃO PENDENTE: Configure a chave GEMINI_API_KEY no arquivo .env!" 
+            });
+        }
+
+        const { pergunta, nickname, modelo } = req.body;
+        if (!pergunta) return res.status(400).json({ erro: "Envie uma pergunta válida." });
 
         const nomeDoJogador = nickname ? nickname.trim() : "Visitante";
-        
-        // Mantido no modelo estável consagrado gemini-1.5-flash
-        const modeloAtivo = "gemini-1.5-flash"; 
+        const modeloFinal = obterModeloValido(modelo);
 
-        // Busca o histórico do MongoDB com suporte à contingência local
         let docs = [];
-        let usandoBanco = false;
-
         if (mongoose.connection.readyState === 1) {
             try {
                 docs = await MensagemDbModel.find().sort({ dataHora: 1 }).limit(10).lean();
-                usandoBanco = true;
-            } catch (dbErr) {
+            } catch (e) {
                 docs = memoriaContingencia.slice(-10);
             }
         } else {
@@ -206,18 +204,16 @@ app.post('/api/chat', async (req, res) => {
             parts: [{ text: d.parts?.[0]?.text || "" }]
         }));
 
-        // Inicializa o modelo usando o endpoint estável v1 (Remove o v1beta que gerava o erro 404)
         const modelIA = genAI.getGenerativeModel({ 
-            model: modeloAtivo, 
-            systemInstruction: `Você é o Mestre do Jogo e Guardião do conhecimento cibernético do SISTEMA N.E.O.N. 3.5.
+            model: modeloFinal, 
+            systemInstruction: `Você é o Mestre do Jogo e Guardião do SISTEMA N.E.O.N. 3.5.
             Trate o usuário pelo apelido informado: ${nomeDoJogador}.
-            Regra do Jogo: Proponha desafios e charadas intrigantes sobre tecnologia, hacking e computação. 
-            Se o usuário responder acertando a charada de forma justa, você DEVE obrigatoriamente chamar a função 'adicionarXP' passando o nickname '${nomeDoJogador}' e 50 pontos de quantidade.
-            Se ele pedir a resposta, errar muito ou desistir, você deve chamar a função 'adicionarXP' e retirar 10 pontos (passando -10).
-            Nunca revele no texto final a numeração exata de XP do usuário, apenas o parabenize ou lamente os pontos alterados. 
-            Além disso, você continua capaz de executar buscas de clima e moedas quando o usuário solicitar.`,
+            Regra: Faça desafios/charadas sobre hacking e tecnologia. 
+            Acertou a charada -> chame 'adicionarXP' com +50 pontos.
+            Errou/desistiu -> chame 'adicionarXP' com -10 pontos.
+            Responda também a outras perguntas, clima e conversões quando solicitado.`,
             tools: [{ functionDeclarations: [declaracaoClima, declaracaoMoeda, declaracaoXP] }]
-        }); // Sem o segundo parâmetro v1beta para garantir a rota padrão estável
+        });
 
         const chatSession = modelIA.startChat({ history: historicoSeguro });
 
@@ -227,25 +223,14 @@ app.post('/api/chat', async (req, res) => {
 
         while (functionCallPart) {
             const { name, args } = functionCallPart.functionCall;
-            console.log(`🤖 Ferramenta acionada: ${name} com args:`, args);
-
             let functionResult = {};
-            if (name === "buscarClimaTempoReal") {
-                functionResult = await buscarClimaTempoReal(args.cidade);
-            } else if (name === "converterMoedas") {
-                functionResult = await converterMoedas(args.valor, args.de, args.para);
-            } else if (name === "adicionarXP") {
-                const nickAlvo = args.nickname || nomeDoJogador;
-                functionResult = await adicionarXP(nickAlvo, args.quantidade);
-            }
+
+            if (name === "buscarClimaTempoReal") functionResult = await buscarClimaTempoReal(args.cidade);
+            else if (name === "converterMoedas") functionResult = await converterMoedas(args.valor, args.de, args.para);
+            else if (name === "adicionarXP") functionResult = await adicionarXP(args.nickname || nomeDoJogador, args.quantidade);
 
             result = await chatSession.sendMessage([
-                {
-                    functionResponse: {
-                        name: name,
-                        response: { result: functionResult }
-                    }
-                }
+                { functionResponse: { name: name, response: { result: functionResult } } }
             ]);
 
             parts = result.response.candidates?.[0]?.content?.parts;
@@ -254,14 +239,11 @@ app.post('/api/chat', async (req, res) => {
 
         const respostaTexto = result.response.text();
 
-        // Salva a nova interação no histórico
-        if (usandoBanco && mongoose.connection.readyState === 1) {
+        if (mongoose.connection.readyState === 1) {
             try {
                 await MensagemDbModel.create({ role: "user", parts: [{ text: pergunta }] });
                 await MensagemDbModel.create({ role: "model", parts: [{ text: respostaTexto }] });
-            } catch (saveErr) {
-                console.error("❌ Erro ao salvar histórico:", saveErr.message);
-            }
+            } catch (err) {}
         } else {
             memoriaContingencia.push({ role: "user", parts: [{ text: pergunta }] });
             memoriaContingencia.push({ role: "model", parts: [{ text: respostaTexto }] });
@@ -275,17 +257,17 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// Limpeza das coleções
 app.delete('/api/chat/limpar', async (req, res) => {
     try {
         memoriaContingencia = [];
+        rankingContingencia = {};
         if (mongoose.connection.readyState === 1) {
             await MensagemDbModel.deleteMany({});
             await JogadorModel.deleteMany({});
         }
         res.json({ sucesso: true });
     } catch (e) { 
-        res.status(500).json({ erro: "Erro ao redefinir base: " + e.message }); 
+        res.status(500).json({ erro: e.message }); 
     }
 });
 
